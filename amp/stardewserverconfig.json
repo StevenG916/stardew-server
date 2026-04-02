@@ -1,0 +1,337 @@
+[
+    {
+        "DisplayName": "Farm Name",
+        "Category": "Stardew Server:stadia_controller",
+        "Subcategory": "Farm Settings:agriculture:1",
+        "Description": "The name of the farm when auto-creating a new save",
+        "Keywords": "farm,name",
+        "FieldName": "FarmName",
+        "InputType": "text",
+        "ParamFieldName": "FarmName",
+        "IncludeInCommandLine": false,
+        "DefaultValue": "Dedicated Farm",
+        "Placeholder": "My Farm",
+        "EnumValues": {}
+    },
+    {
+        "DisplayName": "Farm Type",
+        "Category": "Stardew Server:stadia_controller",
+        "Subcategory": "Farm Settings:agriculture:1",
+        "Description": "The type of farm layout to use when creating a new save",
+        "Keywords": "farm,type,layout",
+        "FieldName": "FarmType",
+        "InputType": "enum",
+        "ParamFieldName": "FarmType",
+        "IncludeInCommandLine": false,
+        "DefaultValue": "standard",
+        "EnumValues": {
+            "standard": "Standard",
+            "riverland": "Riverland",
+            "forest": "Forest",
+            "hilltop": "Hilltop",
+            "wilderness": "Wilderness",
+            "fourCorners": "Four Corners",
+            "beach": "Beach"
+        }
+    },
+    {
+        "DisplayName": "Farmer Name",
+        "Category": "Stardew Server:stadia_controller",
+        "Subcategory": "Farm Settings:agriculture:1",
+        "Description": "The name of the server bot farmer character",
+        "Keywords": "farmer,bot,name",
+        "FieldName": "FarmerName",
+        "InputType": "text",
+        "ParamFieldName": "FarmerName",
+        "IncludeInCommandLine": false,
+        "DefaultValue": "ServerBot",
+        "Placeholder": "ServerBot",
+        "EnumValues": {}
+    },
+    {
+        "DisplayName": "Pet Preference",
+        "Category": "Stardew Server:stadia_controller",
+        "Subcategory": "Farm Settings:agriculture:1",
+        "Description": "Which pet to choose when the game asks",
+        "Keywords": "pet,cat,dog",
+        "FieldName": "PetPreference",
+        "InputType": "enum",
+        "ParamFieldName": "PetPreference",
+        "IncludeInCommandLine": false,
+        "DefaultValue": "cat",
+        "EnumValues": {
+            "cat": "Cat",
+            "dog": "Dog"
+        }
+    },
+    {
+        "DisplayName": "Cave Choice",
+        "Category": "Stardew Server:stadia_controller",
+        "Subcategory": "Farm Settings:agriculture:1",
+        "Description": "Which cave option to select when Demetrius asks",
+        "Keywords": "cave,bats,mushrooms",
+        "FieldName": "CaveChoice",
+        "InputType": "enum",
+        "ParamFieldName": "CaveChoice",
+        "IncludeInCommandLine": false,
+        "DefaultValue": "mushrooms",
+        "EnumValues": {
+            "mushrooms": "Mushrooms",
+            "bats": "Fruit Bats"
+        }
+    },
+    {
+        "DisplayName": "Max Players",
+        "Category": "Stardew Server:stadia_controller",
+        "Subcategory": "Server Settings:dns:2",
+        "Description": "Maximum number of farmhand players (1-7). Total slots = this + 1 host bot",
+        "Keywords": "max,players,slots,cabins",
+        "FieldName": "MaxPlayers",
+        "InputType": "number",
+        "ParamFieldName": "MaxPlayers",
+        "IncludeInCommandLine": false,
+        "DefaultValue": "7",
+        "MinValue": "1",
+        "MaxValue": "7",
+        "Suffix": "players",
+        "EnumValues": {}
+    },
+    {
+        "DisplayName": "Cabin Style",
+        "Category": "Stardew Server:stadia_controller",
+        "Subcategory": "Server Settings:dns:2",
+        "Description": "The style of cabins to auto-build for farmhands",
+        "Keywords": "cabin,style,house",
+        "FieldName": "CabinStyle",
+        "InputType": "enum",
+        "ParamFieldName": "CabinStyle",
+        "IncludeInCommandLine": false,
+        "DefaultValue": "wood",
+        "EnumValues": {
+            "wood": "Wood",
+            "stone": "Stone",
+            "plank": "Plank"
+        }
+    },
+    {
+        "DisplayName": "Starting Cabins",
+        "Category": "Stardew Server:stadia_controller",
+        "Subcategory": "Server Settings:dns:2",
+        "Description": "Number of cabins to place when creating a new farm (0-3)",
+        "Keywords": "starting,cabins,initial",
+        "FieldName": "StartingCabins",
+        "InputType": "number",
+        "ParamFieldName": "StartingCabins",
+        "IncludeInCommandLine": false,
+        "DefaultValue": "3",
+        "MinValue": "0",
+        "MaxValue": "3",
+        "Suffix": "cabins",
+        "EnumValues": {}
+    },
+    {
+        "DisplayName": "Welcome Message",
+        "Category": "Stardew Server:stadia_controller",
+        "Subcategory": "Server Settings:dns:2",
+        "Description": "Message displayed to players when they connect",
+        "Keywords": "welcome,motd,message,join",
+        "FieldName": "ServerMessage",
+        "InputType": "text",
+        "ParamFieldName": "ServerMessage",
+        "IncludeInCommandLine": false,
+        "DefaultValue": "Welcome to the Stardew Valley dedicated server!",
+        "Placeholder": "Welcome message",
+        "EnumValues": {}
+    },
+    {
+        "DisplayName": "Pause When Empty",
+        "Category": "Stardew Server:stadia_controller",
+        "Subcategory": "Server Settings:dns:2",
+        "Description": "Pause the game when no players are connected (saves resources)",
+        "Keywords": "pause,empty,idle",
+        "FieldName": "PauseWhenEmpty",
+        "InputType": "checkbox",
+        "ParamFieldName": "PauseWhenEmpty",
+        "IncludeInCommandLine": false,
+        "DefaultValue": "true",
+        "EnumValues": {
+            "True": "true",
+            "False": "false"
+        }
+    },
+    {
+        "DisplayName": "Pause Delay",
+        "Category": "Stardew Server:stadia_controller",
+        "Subcategory": "Server Settings:dns:2",
+        "Description": "Seconds to wait before pausing after last player disconnects",
+        "Keywords": "pause,delay,timeout",
+        "FieldName": "PauseDelay",
+        "InputType": "number",
+        "ParamFieldName": "PauseDelay",
+        "IncludeInCommandLine": false,
+        "DefaultValue": "30",
+        "MinValue": "0",
+        "MaxValue": "600",
+        "Suffix": "seconds",
+        "EnumValues": {}
+    },
+    {
+        "DisplayName": "Auto Sleep",
+        "Category": "Stardew Server:stadia_controller",
+        "Subcategory": "Automation:smart_toy:3",
+        "Description": "Automatically put the bot to bed when all real players are sleeping",
+        "Keywords": "auto,sleep,bed,day",
+        "FieldName": "AutoSleep",
+        "InputType": "checkbox",
+        "ParamFieldName": "AutoSleep",
+        "IncludeInCommandLine": false,
+        "DefaultValue": "true",
+        "EnumValues": {
+            "True": "true",
+            "False": "false"
+        }
+    },
+    {
+        "DisplayName": "Auto Festival",
+        "Category": "Stardew Server:stadia_controller",
+        "Subcategory": "Automation:smart_toy:3",
+        "Description": "Automatically handle festival attendance for the bot",
+        "Keywords": "auto,festival,event",
+        "FieldName": "AutoFestival",
+        "InputType": "checkbox",
+        "ParamFieldName": "AutoFestival",
+        "IncludeInCommandLine": false,
+        "DefaultValue": "true",
+        "EnumValues": {
+            "True": "true",
+            "False": "false"
+        }
+    },
+    {
+        "DisplayName": "Auto Dismiss Menus",
+        "Category": "Stardew Server:stadia_controller",
+        "Subcategory": "Automation:smart_toy:3",
+        "Description": "Automatically dismiss level-up, shipping, and other menus for the bot",
+        "Keywords": "auto,dismiss,menus,dialogs",
+        "FieldName": "AutoDismissMenus",
+        "InputType": "checkbox",
+        "ParamFieldName": "AutoDismissMenus",
+        "IncludeInCommandLine": false,
+        "DefaultValue": "true",
+        "EnumValues": {
+            "True": "true",
+            "False": "false"
+        }
+    },
+    {
+        "DisplayName": "Profit Margin",
+        "Category": "Stardew Server:stadia_controller",
+        "Subcategory": "Gameplay:sports_esports:4",
+        "Description": "Profit margin multiplier (1.0 = normal, 0.75 = 75%, 0.5 = 50%)",
+        "Keywords": "profit,margin,difficulty,money",
+        "FieldName": "ProfitMargin",
+        "InputType": "enum",
+        "ParamFieldName": "ProfitMargin",
+        "IncludeInCommandLine": false,
+        "DefaultValue": "1.0",
+        "EnumValues": {
+            "1.0": "Normal (100%)",
+            "0.75": "75%",
+            "0.5": "50%",
+            "0.25": "25%"
+        }
+    },
+    {
+        "DisplayName": "Monsters on Farm",
+        "Category": "Stardew Server:stadia_controller",
+        "Subcategory": "Gameplay:sports_esports:4",
+        "Description": "Enable monster spawning on the farm at night",
+        "Keywords": "monsters,combat,night",
+        "FieldName": "MonstersOnFarm",
+        "InputType": "checkbox",
+        "ParamFieldName": "MonstersOnFarm",
+        "IncludeInCommandLine": false,
+        "DefaultValue": "false",
+        "EnumValues": {
+            "True": "true",
+            "False": "false"
+        }
+    },
+    {
+        "DisplayName": "Auto Create Farm",
+        "Category": "Stardew Server:stadia_controller",
+        "Subcategory": "Advanced:settings:5",
+        "Description": "Automatically create a new farm if no save file exists",
+        "Keywords": "auto,create,new,farm",
+        "FieldName": "AutoCreateFarm",
+        "InputType": "checkbox",
+        "ParamFieldName": "AutoCreateFarm",
+        "IncludeInCommandLine": false,
+        "DefaultValue": "true",
+        "EnumValues": {
+            "True": "true",
+            "False": "false"
+        }
+    },
+    {
+        "DisplayName": "Save File Name",
+        "Category": "Stardew Server:stadia_controller",
+        "Subcategory": "Advanced:settings:5",
+        "Description": "Specific save file to load (leave empty for most recent or auto-create)",
+        "Keywords": "save,file,load",
+        "FieldName": "SaveFileName",
+        "InputType": "text",
+        "ParamFieldName": "SaveFileName",
+        "IncludeInCommandLine": false,
+        "DefaultValue": "",
+        "Placeholder": "Leave empty for auto",
+        "EnumValues": {}
+    },
+    {
+        "DisplayName": "Verbose Logging",
+        "Category": "Stardew Server:stadia_controller",
+        "Subcategory": "Advanced:settings:5",
+        "Description": "Enable detailed debug logging (useful for troubleshooting)",
+        "Keywords": "verbose,debug,logging",
+        "FieldName": "VerboseLogging",
+        "InputType": "checkbox",
+        "ParamFieldName": "VerboseLogging",
+        "IncludeInCommandLine": false,
+        "DefaultValue": "false",
+        "EnumValues": {
+            "True": "true",
+            "False": "false"
+        }
+    },
+    {
+        "DisplayName": "Auto Update Mod",
+        "Category": "Stardew Server:stadia_controller",
+        "Subcategory": "Advanced:settings:5",
+        "Description": "Automatically download the latest Dedicated Server mod during updates",
+        "Keywords": "auto,update,mod",
+        "FieldName": "AutoUpdateMod",
+        "InputType": "checkbox",
+        "ParamFieldName": "AutoUpdateMod",
+        "IncludeInCommandLine": false,
+        "DefaultValue": "true",
+        "EnumValues": {
+            "True": "true",
+            "False": "false"
+        }
+    },
+    {
+        "DisplayName": "Mod GitHub Repository",
+        "Category": "Stardew Server:stadia_controller",
+        "Subcategory": "Advanced:settings:5",
+        "Description": "GitHub repository for auto-updating the dedicated server mod (owner/repo format)",
+        "Keywords": "github,repo,update,source",
+        "FieldName": "ModGithubRepo",
+        "InputType": "text",
+        "ParamFieldName": "ModGithubRepo",
+        "IncludeInCommandLine": false,
+        "DefaultValue": "",
+        "Placeholder": "owner/stardew-server",
+        "Hidden": true,
+        "EnumValues": {}
+    }
+]

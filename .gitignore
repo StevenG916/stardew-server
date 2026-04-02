@@ -1,0 +1,40 @@
+# Build outputs
+bin/
+obj/
+*.dll
+*.pdb
+*.exe
+
+# IDE
+.vs/
+.vscode/
+*.suo
+*.user
+*.sln.docstates
+*.csproj.user
+
+# Rider
+.idea/
+*.sln.iml
+
+# OS
+Thumbs.db
+.DS_Store
+
+# NuGet
+packages/
+*.nupkg
+
+# Game files (don't commit the game itself)
+game/
+GamePath/
+
+# SMAPI
+ErrorLogs/
+smapi-internal/
+
+# Stardew Valley saves
+Saves/
+
+# Docker volumes
+docker/data/

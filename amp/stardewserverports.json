@@ -1,0 +1,9 @@
+[
+    {
+        "Protocol": "UDP",
+        "Port": 24642,
+        "Ref": "GamePort",
+        "Name": "Game Port",
+        "Description": "Port for Stardew Valley multiplayer game traffic"
+    }
+]

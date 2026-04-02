@@ -1,0 +1,11 @@
+{
+    "Name": "Stardew Dedicated Server",
+    "Author": "StardewServer",
+    "Version": "1.0.0",
+    "Description": "Turns Stardew Valley into a dedicated multiplayer server with AMP integration, automated host bot, and admin console commands.",
+    "UniqueID": "StardewServer.DedicatedServer",
+    "EntryDll": "StardewDedicatedServer.dll",
+    "MinimumApiVersion": "4.0.0",
+    "MinimumGameVersion": "1.6.0",
+    "UpdateKeys": []
+}

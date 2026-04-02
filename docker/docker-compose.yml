@@ -1,0 +1,60 @@
+# Stardew Valley Dedicated Server - Docker Compose
+#
+# Setup:
+#   1. Place your Stardew Valley game files in ./game/
+#   2. Install SMAPI into the game directory
+#   3. Copy StardewDedicatedServer mod to ./game/Mods/
+#   4. Run: docker-compose up -d
+#
+# The server will:
+#   - Start Xvfb virtual display
+#   - Launch SMAPI with the dedicated server mod
+#   - Auto-create or load a farm
+#   - Accept multiplayer connections on port 24642
+#
+# Saves persist in ./data/saves/
+# Mod config persists in ./data/config/
+
+services:
+  stardew-server:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: stardew-dedicated-server
+    restart: unless-stopped
+
+    ports:
+      - "24642:24642/udp"
+
+    volumes:
+      # Mount game files (read-write for saves/mods)
+      - ./game:/game
+      # Persistent save data
+      - ./data/saves:/saves
+      # Mod configuration
+      - ./data/config:/config
+
+    environment:
+      - GAME_DIR=/game
+      - DISPLAY=:99
+
+    # Recommended resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: "2.0"
+        reservations:
+          memory: 512M
+          cpus: "0.5"
+
+    # Allow graceful shutdown (server_quit command)
+    stop_grace_period: 30s
+    stop_signal: SIGINT
+
+    # Logging
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

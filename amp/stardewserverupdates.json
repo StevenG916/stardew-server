@@ -1,0 +1,56 @@
+[
+    {
+        "UpdateStageName": "Verify Game Files",
+        "UpdateSourcePlatform": "All",
+        "UpdateSource": "Executable",
+        "UpdateSourceData": "/bin/bash",
+        "UpdateSourceArgs": "-c \"if [ -f '{{$FullBaseDir}}/Stardew Valley.dll' ]; then echo 'Game files found.'; else echo 'ERROR: Stardew Valley game files not found in {{$FullBaseDir}}'; echo 'Please copy your GOG game files to the server base directory.'; exit 1; fi\"",
+        "SkipOnFailure": false
+    },
+    {
+        "UpdateStageName": "Create Mods Directory",
+        "UpdateSourcePlatform": "All",
+        "UpdateSource": "CreateDirectory",
+        "UpdateSourceArgs": "{{$FullBaseDir}}/Mods/StardewDedicatedServer",
+        "SkipOnFailure": true
+    },
+    {
+        "UpdateStageName": "Download SMAPI",
+        "UpdateSourcePlatform": "All",
+        "UpdateSource": "GithubRelease",
+        "UpdateSourceArgs": "Pathoschild/SMAPI",
+        "UpdateSourceData": "SMAPI-*-installer.zip",
+        "UpdateSourceTarget": "{{$FullBaseDir}}",
+        "UnzipUpdateSource": true,
+        "OverwriteExistingFiles": true,
+        "SkipOnFailure": false
+    },
+    {
+        "UpdateStageName": "Install SMAPI (Linux)",
+        "UpdateSourcePlatform": "Linux",
+        "UpdateSource": "Executable",
+        "UpdateSourceData": "/bin/bash",
+        "UpdateSourceArgs": "-c \"cd '{{$FullBaseDir}}' && find . -maxdepth 2 -name 'install on Linux.sh' -exec chmod +x {} \\; && find . -maxdepth 2 -name 'install on Linux.sh' -exec bash -c 'echo 2 | \\\"{}\\\"' \\;\"",
+        "SkipOnFailure": false
+    },
+    {
+        "UpdateStageName": "Download Dedicated Server Mod",
+        "UpdateSourcePlatform": "All",
+        "UpdateSource": "GithubRelease",
+        "UpdateSourceArgs": "{{ModGithubRepo}}",
+        "UpdateSourceData": "StardewDedicatedServer-*.zip",
+        "UpdateSourceTarget": "{{$FullBaseDir}}/Mods/StardewDedicatedServer",
+        "UnzipUpdateSource": true,
+        "OverwriteExistingFiles": true,
+        "UpdateSourceConditionSetting": "AutoUpdateMod",
+        "UpdateSourceConditionValue": "true",
+        "SkipOnFailure": true
+    },
+    {
+        "UpdateStageName": "Set Executable Permissions (Linux)",
+        "UpdateSourcePlatform": "Linux",
+        "UpdateSource": "SetExecutableFlag",
+        "UpdateSourceData": "{{$FullBaseDir}}/StardewModdingAPI",
+        "SkipOnFailure": true
+    }
+]
