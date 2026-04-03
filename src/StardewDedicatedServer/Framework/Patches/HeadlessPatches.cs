@@ -152,6 +152,9 @@ public static class HeadlessPatches
         return !isEnabled; // Skip draw in headless mode
     }
 
+    /// <summary>Whether headless mode is currently active.</summary>
+    public static bool IsEnabled() => isEnabled;
+
     /// <summary>Enable or disable headless mode at runtime.</summary>
     public static void SetEnabled(bool enabled)
     {

@@ -1,5 +1,9 @@
 using System;
+using System.Collections.Generic;
+using System.Globalization;
 using System.Reflection;
+using System.Threading;
+using System.Threading.Tasks;
 using StardewDedicatedServer.Framework.Patches;
 using StardewModdingAPI;
 using StardewModdingAPI.Events;
@@ -26,6 +30,7 @@ public sealed class DayManager
     private int bedCheckTimer;
     private int sleepDebounce;
     private int lastSaveTime;
+    private bool isSaving;
 
     private const int BedCheckInterval = 60; // ~1 second
     private const int SleepDebounceTicks = 300; // ~5 seconds between attempts
@@ -100,15 +105,16 @@ public sealed class DayManager
         if (!Context.IsWorldReady || !Context.IsMainPlayer)
             return;
 
-        // Periodic auto-save without advancing the day
+        // Periodic auto-save without advancing the day.
+        // Uses SaveGame.getSaveEnumerator() directly on a background thread
+        // instead of SaveGameMenu, which requires multiplayer sync and rendering.
         if (this.Config.AutoSaveInterval > 0 && this.sleepState == SleepState.Awake && this.Players.AnyConnected)
         {
             int elapsed = Game1.timeOfDay - this.lastSaveTime;
-            if (elapsed >= this.Config.AutoSaveInterval && Game1.activeClickableMenu == null)
+            if (elapsed >= this.Config.AutoSaveInterval && !this.isSaving)
             {
                 this.lastSaveTime = Game1.timeOfDay;
-                this.Logger.Info($"Auto-saving at {Game1.timeOfDay}...");
-                Game1.activeClickableMenu = new SaveGameMenu();
+                this.TriggerBackgroundSave();
             }
         }
 
@@ -283,6 +289,39 @@ public sealed class DayManager
             this.sleepState = SleepState.Debouncing;
             this.sleepDebounce = SleepDebounceTicks;
         }
+    }
+
+    /// <summary>
+    /// Save the game on a background thread without blocking gameplay.
+    /// Uses SaveGame.getSaveEnumerator() directly, bypassing SaveGameMenu
+    /// which freezes the game and requires multiplayer sync.
+    /// </summary>
+    private void TriggerBackgroundSave()
+    {
+        this.isSaving = true;
+        this.Logger.Info($"Auto-saving at {Game1.timeOfDay}...");
+
+        Task.Run(() =>
+        {
+            try
+            {
+                Thread.CurrentThread.CurrentCulture = CultureInfo.InvariantCulture;
+                IEnumerator<int> enumerator = SaveGame.getSaveEnumerator();
+                while (enumerator.MoveNext())
+                {
+                    // getSaveEnumerator yields progress values 1-100
+                }
+                this.Logger.Info("Auto-save complete");
+            }
+            catch (Exception ex)
+            {
+                this.Logger.Error($"Auto-save failed: {ex.Message}");
+            }
+            finally
+            {
+                this.isSaving = false;
+            }
+        });
     }
 
 }
