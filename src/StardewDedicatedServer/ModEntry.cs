@@ -1,5 +1,6 @@
 using HarmonyLib;
 using StardewDedicatedServer.Framework;
+using StardewDedicatedServer.Framework.Patches;
 using StardewModdingAPI;
 
 namespace StardewDedicatedServer;
@@ -64,6 +65,12 @@ public sealed class ModEntry : Mod
         // Apply Harmony patches
         var harmony = new Harmony(this.ModManifest.UniqueID);
         this.Bot.ApplyPatches(harmony);
+
+        // Phase 2: Apply headless rendering patches
+        HeadlessPatches.Apply(harmony, this.Logger, this.Config.HeadlessMode);
+
+        // Phase 2: Expand player limit if configured above default
+        PlayerLimitPatch.Apply(harmony, this.Logger, this.Config.MaxPlayers);
 
         this.Logger.Info($"Stardew Dedicated Server v{this.ModManifest.Version} loaded");
         this.Logger.Info("Type 'server_help' for available commands");

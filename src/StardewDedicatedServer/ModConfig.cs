@@ -33,8 +33,8 @@ public sealed class ModConfig
     ** Server Settings
     *********/
 
-    /// <summary>Maximum number of players (determines cabin count). Range: 1-7 farmhands + 1 host = 8 total.</summary>
-    public int MaxPlayers { get; set; } = 7;
+    /// <summary>Maximum number of farmhand players (determines cabin count). Default game limit is 7 (+ 1 host = 8 total). Can be expanded beyond 8 with mod support.</summary>
+    public int MaxPlayers { get; set; } = 11;
 
     /// <summary>Style of cabins to auto-build. Values: "wood", "stone", "plank"</summary>
     public string CabinStyle { get; set; } = "wood";
@@ -86,4 +86,11 @@ public sealed class ModConfig
 
     /// <summary>Whether to enable verbose server logging (debug output).</summary>
     public bool VerboseLogging { get; set; } = false;
+
+    /// <summary>
+    /// Whether to enable headless mode (Phase 2).
+    /// Skips the entire rendering pipeline to dramatically reduce CPU usage.
+    /// Disable this if you need to debug rendering issues or use VNC to view the server.
+    /// </summary>
+    public bool HeadlessMode { get; set; } = true;
 }

@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.Text;
+using StardewDedicatedServer.Framework.Patches;
 using StardewModdingAPI;
 using StardewValley;
 
@@ -56,6 +57,7 @@ public sealed class ConsoleCommands
         commands.Add("server_quit", "Gracefully save and shut down the server.", this.CmdQuit);
         commands.Add("server_pause", "Pause the game (freeze time).", this.CmdPause);
         commands.Add("server_resume", "Resume the game (unfreeze time).", this.CmdResume);
+        commands.Add("server_headless", "Toggle headless mode on/off. Usage: server_headless [on|off]", this.CmdHeadless);
         commands.Add("server_help", "Show all server commands.", this.CmdHelp);
     }
 
@@ -218,20 +220,40 @@ public sealed class ConsoleCommands
         }
     }
 
+    /// <summary>Toggle headless mode.</summary>
+    private void CmdHeadless(string name, string[] args)
+    {
+        if (args.Length == 0)
+        {
+            this.Logger.Info("Usage: server_headless [on|off]");
+            return;
+        }
+
+        bool enable = args[0].ToLower() switch
+        {
+            "on" or "true" or "1" => true,
+            "off" or "false" or "0" => false,
+            _ => true
+        };
+
+        HeadlessPatches.SetEnabled(enable);
+    }
+
     /// <summary>Show help for all server commands.</summary>
     private void CmdHelp(string name, string[] args)
     {
         var sb = new StringBuilder();
         sb.AppendLine("=== Server Commands ===");
-        sb.AppendLine("  server_status   - Show server status and game info");
-        sb.AppendLine("  server_players  - List connected players");
-        sb.AppendLine("  server_kick     - Kick a player: server_kick <name>");
-        sb.AppendLine("  server_say      - Broadcast message: server_say <message>");
-        sb.AppendLine("  server_save     - Force save");
-        sb.AppendLine("  server_quit     - Save and shut down");
-        sb.AppendLine("  server_pause    - Pause the game");
-        sb.AppendLine("  server_resume   - Resume the game");
-        sb.AppendLine("  server_help     - Show this help");
+        sb.AppendLine("  server_status    - Show server status and game info");
+        sb.AppendLine("  server_players   - List connected players");
+        sb.AppendLine("  server_kick      - Kick a player: server_kick <name>");
+        sb.AppendLine("  server_say       - Broadcast message: server_say <message>");
+        sb.AppendLine("  server_save      - Force save");
+        sb.AppendLine("  server_quit      - Save and shut down");
+        sb.AppendLine("  server_pause     - Pause the game");
+        sb.AppendLine("  server_resume    - Resume the game");
+        sb.AppendLine("  server_headless  - Toggle headless mode: server_headless [on|off]");
+        sb.AppendLine("  server_help      - Show this help");
 
         this.Logger.Info(sb.ToString().TrimEnd());
     }

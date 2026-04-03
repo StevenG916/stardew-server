@@ -154,7 +154,12 @@ public sealed class ServerBot
 
         // Keep bot farmer healthy
         if (e.IsMultipleOf(60)) // Every second
+        {
             this.MaintainBotHealth();
+
+            // Periodically try to resolve player names (they may not be available at connect time)
+            this.Players.RefreshPlayerNames();
+        }
 
         // Handle pause countdown
         this.UpdatePauseState();

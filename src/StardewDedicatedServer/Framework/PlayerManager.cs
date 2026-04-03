@@ -186,20 +186,48 @@ public sealed class PlayerManager
 
     /// <summary>Resolve a player's display name from their multiplayer ID.</summary>
     /// <param name="playerId">The player's unique ID.</param>
-    /// <returns>The player's name, or "Unknown" if not found.</returns>
+    /// <returns>The player's name, or a fallback if not found yet.</returns>
     private string ResolvePlayerName(long playerId)
     {
-        // Try to find the farmer by their multiplayer ID
-        if (Context.IsWorldReady)
+        if (!Context.IsWorldReady)
+            return $"Player_{playerId}";
+
+        // Try online farmers first (most up to date)
+        foreach (var farmer in Game1.getOnlineFarmers())
         {
-            foreach (var farmer in Game1.getAllFarmhands())
-            {
-                if (farmer.UniqueMultiplayerID == playerId)
-                    return farmer.Name;
-            }
+            if (farmer.UniqueMultiplayerID == playerId && !string.IsNullOrWhiteSpace(farmer.Name))
+                return farmer.Name;
         }
 
+        // Try all farmhands (includes offline ones)
+        foreach (var farmer in Game1.getAllFarmhands())
+        {
+            if (farmer.UniqueMultiplayerID == playerId && !string.IsNullOrWhiteSpace(farmer.Name))
+                return farmer.Name;
+        }
+
+        // Try otherFarmers dictionary
+        if (Game1.otherFarmers.TryGetValue(playerId, out var otherFarmer) && !string.IsNullOrWhiteSpace(otherFarmer.Name))
+            return otherFarmer.Name;
+
         return $"Player_{playerId}";
+    }
+
+    /// <summary>Update player names after they've fully loaded (names may not be available at connect time).</summary>
+    public void RefreshPlayerNames()
+    {
+        foreach (var kvp in this.ConnectedPlayers)
+        {
+            if (kvp.Value.Name.StartsWith("Player_"))
+            {
+                string newName = this.ResolvePlayerName(kvp.Key);
+                if (newName != kvp.Value.Name)
+                {
+                    kvp.Value.Name = newName;
+                    this.Logger.Debug($"Resolved player name: {newName} (ID: {kvp.Key})");
+                }
+            }
+        }
     }
 }
 
