@@ -72,6 +72,9 @@ public sealed class ModEntry : Mod
         // Phase 2: Expand player limit if configured above default
         PlayerLimitPatch.Apply(harmony, this.Logger, this.Config.MaxPlayers);
 
+        // Phase 3: Patch GameRunner.Draw to eliminate Xvfb dependency
+        NoXvfbPatches.Apply(harmony, this.Logger, this.Config.HeadlessMode && this.Config.NoXvfbMode);
+
         this.Logger.Info($"Stardew Dedicated Server v{this.ModManifest.Version} loaded");
         this.Logger.Info("Type 'server_help' for available commands");
     }

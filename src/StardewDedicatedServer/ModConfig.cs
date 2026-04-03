@@ -93,4 +93,12 @@ public sealed class ModConfig
     /// Disable this if you need to debug rendering issues or use VNC to view the server.
     /// </summary>
     public bool HeadlessMode { get; set; } = true;
+
+    /// <summary>
+    /// Whether to enable no-Xvfb mode (Phase 3).
+    /// Patches GameRunner.Draw to prevent all GPU calls, allowing the server
+    /// to run with SDL_VIDEODRIVER=dummy and no virtual display.
+    /// Requires HeadlessMode to also be true.
+    /// </summary>
+    public bool NoXvfbMode { get; set; } = true;
 }
