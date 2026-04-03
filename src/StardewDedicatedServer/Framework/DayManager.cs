@@ -25,6 +25,7 @@ public sealed class DayManager
     private SleepState sleepState = SleepState.Awake;
     private int bedCheckTimer;
     private int sleepDebounce;
+    private int lastSaveTime;
 
     private const int BedCheckInterval = 60; // ~1 second
     private const int SleepDebounceTicks = 300; // ~5 seconds between attempts
@@ -62,6 +63,7 @@ public sealed class DayManager
     {
         this.sleepState = SleepState.Awake;
         this.sleepDebounce = 0;
+        this.lastSaveTime = Game1.timeOfDay;
 
         // Re-enable headless mode after day transition completes
         if (this.Config.HeadlessMode)
@@ -97,6 +99,18 @@ public sealed class DayManager
     {
         if (!Context.IsWorldReady || !Context.IsMainPlayer)
             return;
+
+        // Periodic auto-save without advancing the day
+        if (this.Config.AutoSaveInterval > 0 && this.sleepState == SleepState.Awake && this.Players.AnyConnected)
+        {
+            int elapsed = Game1.timeOfDay - this.lastSaveTime;
+            if (elapsed >= this.Config.AutoSaveInterval && Game1.activeClickableMenu == null)
+            {
+                this.lastSaveTime = Game1.timeOfDay;
+                this.Logger.Info($"Auto-saving at {Game1.timeOfDay}...");
+                Game1.activeClickableMenu = new SaveGameMenu();
+            }
+        }
 
         if (!this.Config.AutoSleep)
             return;

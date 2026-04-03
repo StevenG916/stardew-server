@@ -58,6 +58,10 @@ public sealed class ModConfig
     /// <summary>Whether the bot auto-handles festival attendance.</summary>
     public bool AutoFestival { get; set; } = true;
 
+
+    /// <summary>Auto-save interval in game-time minutes. 0 = disabled. Default: 120 (every 2 game hours).</summary>
+    public int AutoSaveInterval { get; set; } = 120;
+
     /// <summary>Whether to auto-dismiss menus/dialogs for the bot host.</summary>
     public bool AutoDismissMenus { get; set; } = true;
 

@@ -225,11 +225,6 @@ public sealed class ServerBot
                 }
             }
 
-            // Log time state for debugging
-            if (Game1.timeOfDay % 100 == 0) // Log every game hour
-            {
-                this.Logger.Info($"Time: {Game1.timeOfDay}, shouldTimePass: {Game1.shouldTimePass()}, IsTimePaused: {Game1.netWorldState?.Value?.IsTimePaused}, sleeping: {this.Days.IsSleeping}");
-            }
         }
 
         // Handle pause countdown
