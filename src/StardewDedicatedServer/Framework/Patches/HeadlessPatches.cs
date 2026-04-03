@@ -13,8 +13,11 @@ namespace StardewDedicatedServer.Framework.Patches;
 /// Game1.Draw() a no-op. The game loop (Update) continues running normally
 /// so all game logic, networking, and multiplayer state sync still works.
 ///
-/// This dramatically reduces CPU usage (from ~60% to ~5-10%) and memory usage
-/// (no textures/sprites loaded for rendering).
+/// CRITICAL: chatBox.update() is normally called ONLY from the Draw path
+/// (inside DrawOverlays). We relocate it to a postfix on Update to prevent
+/// an unbounded memory leak from chat messages never expiring.
+///
+/// This dramatically reduces CPU usage (from ~60% to ~5-10%).
 /// </summary>
 public static class HeadlessPatches
 {
@@ -42,28 +45,33 @@ public static class HeadlessPatches
 
         logger.Info("Headless mode ENABLED — skipping rendering pipeline");
 
-        // Patch Game1.Draw to skip all rendering
+        // Patch 1: Skip Game1.Draw entirely (the main rendering entry point)
         harmony.Patch(
             original: AccessTools.Method(typeof(Game1), "Draw", new[] { typeof(GameTime) }),
             prefix: new HarmonyMethod(typeof(HeadlessPatches), nameof(BeforeDraw))
         );
 
-        // Patch Game1._draw to skip the heavy rendering (fallback if Draw patch doesn't catch it)
+        // Patch 2: Skip Game1._draw as a fallback
         harmony.Patch(
             original: AccessTools.Method(typeof(Game1), "_draw", new[] { typeof(GameTime), typeof(RenderTarget2D) }),
             prefix: new HarmonyMethod(typeof(HeadlessPatches), nameof(Before_Draw))
         );
 
-        logger.Info("Headless rendering patches applied");
+        // Patch 3: Relocate chatBox.update() to the Update loop
+        // CRITICAL: Without this, chat messages never expire = memory leak!
+        // chatBox.update() is normally called only from DrawOverlays in the Draw path.
+        harmony.Patch(
+            original: AccessTools.Method(typeof(Game1), "Update", new[] { typeof(GameTime) }),
+            postfix: new HarmonyMethod(typeof(HeadlessPatches), nameof(AfterUpdate))
+        );
+
+        logger.Info("Headless rendering patches applied (chatBox.update relocated to Update loop)");
     }
 
     /// <summary>
     /// Skip Game1.Draw entirely. This is the main entry point for all rendering.
     /// By returning false, the entire Draw method (including _draw, renderScreenBuffer,
     /// and all SpriteBatch operations) is skipped.
-    ///
-    /// The only thing we preserve is the isDrawing flag management, since some
-    /// UI code checks it (though on a headless server, UI code shouldn't run).
     /// </summary>
     [HarmonyPrefix]
     private static bool BeforeDraw(Game1 __instance, GameTime gameTime)
@@ -82,21 +90,6 @@ public static class HeadlessPatches
             }
         }
 
-        // Skip the draw — but call base.Draw to keep MonoGame's internal state happy
-        // MonoGame's Game.Draw does some internal bookkeeping (present,
-        // frame timing) that we want to preserve
-        try
-        {
-            // Set and clear the isDrawing flag so any code that checks it
-            // doesn't get confused (isDrawing is an instance field)
-            __instance.isDrawing = true;
-            __instance.isDrawing = false;
-        }
-        catch
-        {
-            // Ignore any errors from flag management
-        }
-
         return false; // Skip Game1.Draw
     }
 
@@ -110,6 +103,32 @@ public static class HeadlessPatches
             return true;
 
         return false; // Skip _draw
+    }
+
+    /// <summary>
+    /// Postfix on Game1.Update — runs chatBox.update() which is normally
+    /// only called from the Draw path (DrawOverlays). Without this,
+    /// chat messages never expire and leak memory indefinitely.
+    ///
+    /// This is safe because chatBox.update() only:
+    /// - Decrements message display timers
+    /// - Updates message alpha (visual, irrelevant headless)
+    /// - Processes keyboard input (irrelevant headless)
+    /// </summary>
+    [HarmonyPostfix]
+    private static void AfterUpdate(Game1 __instance, GameTime gameTime)
+    {
+        if (!isEnabled)
+            return;
+
+        try
+        {
+            Game1.chatBox?.update(Game1.currentGameTime);
+        }
+        catch
+        {
+            // Ignore — chatBox may not be initialized yet
+        }
     }
 
     /// <summary>Enable or disable headless mode at runtime.</summary>
