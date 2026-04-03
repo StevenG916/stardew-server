@@ -66,11 +66,11 @@ public static class HeadlessPatches
             postfix: new HarmonyMethod(typeof(HeadlessPatches), nameof(AfterUpdate))
         );
 
-        // Patch 4: Skip ReadyCheckDialog.draw to prevent GPU calls during sleep
-        // ReadyCheckDialog is used for multiplayer sleep coordination but its draw
-        // method calls SpriteBatch operations that crash without a GPU context.
+        // Patch 4: Skip ConfirmationDialog.draw to prevent GPU calls during sleep.
+        // ReadyCheckDialog extends ConfirmationDialog — the draw method is declared
+        // on ConfirmationDialog, not overridden on ReadyCheckDialog.
         harmony.Patch(
-            original: AccessTools.Method(typeof(ReadyCheckDialog), "draw", new[] { typeof(SpriteBatch) }),
+            original: AccessTools.Method(typeof(ConfirmationDialog), "draw", new[] { typeof(SpriteBatch) }),
             prefix: new HarmonyMethod(typeof(HeadlessPatches), nameof(BeforeReadyCheckDialogDraw))
         );
 

@@ -85,6 +85,13 @@ public static class NoXvfbPatches
         logger.Info("No-Xvfb patches applied");
     }
 
+    /// <summary>Enable or disable No-Xvfb mode at runtime.</summary>
+    public static void SetEnabled(bool enabled)
+    {
+        isEnabled = enabled;
+        Logger?.Info($"No-Xvfb mode {(enabled ? "ENABLED" : "DISABLED")}");
+    }
+
     /// <summary>
     /// Skip GameRunner.Draw entirely.
     /// GameRunner.Draw iterates game instances and calls GraphicsDevice.Viewport

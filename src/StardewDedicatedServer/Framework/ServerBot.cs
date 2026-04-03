@@ -139,7 +139,8 @@ public sealed class ServerBot
     private void OnUpdateTicked(object? sender, UpdateTickedEventArgs e)
     {
         // Handle auto-load from title screen (before world is ready)
-        if (!this.farmSetupComplete && !this.autoLoadAttempted)
+        // Skip if SaveCreator is actively creating a farm
+        if (!this.farmSetupComplete && !this.autoLoadAttempted && !this.SaveCreator.IsCreating)
         {
             if (Game1.activeClickableMenu is TitleMenu && this.autoLoadDelay < 0)
             {
@@ -376,20 +377,77 @@ public sealed class ServerBot
         if (!Context.IsWorldReady)
             return;
 
+        var farm = Game1.getFarm();
         int existingCabins = 0;
-        foreach (var building in Game1.getFarm().buildings)
+        foreach (var building in farm.buildings)
         {
             if (building.buildingType.Value?.Contains("Cabin") == true)
                 existingCabins++;
         }
 
-        int needed = this.Config.MaxPlayers - existingCabins;
-        if (needed > 0)
+        // MaxPlayers is total including host, so we need MaxPlayers-1 cabins
+        int needed = (this.Config.MaxPlayers - 1) - existingCabins;
+        if (needed <= 0)
         {
-            this.Logger.Info($"Farm has {existingCabins} cabins, need {needed} more for {this.Config.MaxPlayers} max players");
-            // Note: Auto-building cabins programmatically is complex and may be added in a future update.
-            // For now, log the requirement so the admin knows to build them.
+            this.Logger.Info($"Farm has {existingCabins} cabins — enough for {this.Config.MaxPlayers} players");
+            return;
         }
+
+        this.Logger.Info($"Farm has {existingCabins} cabins, building {needed} more for {this.Config.MaxPlayers} max players");
+
+        // Map config cabin style to building type
+        string cabinType = this.Config.CabinStyle?.ToLowerInvariant() switch
+        {
+            "stone" => "Stone Cabin",
+            "plank" => "Plank Cabin",
+            _ => "Log Cabin"
+        };
+
+        int built = 0;
+        for (int i = 0; i < needed; i++)
+        {
+            bool placed = false;
+
+            // Try random positions (200 attempts)
+            for (int attempt = 0; attempt < 200; attempt++)
+            {
+                var tile = farm.getRandomTile();
+                if (farm.buildStructure(cabinType, tile, Game1.player, out var constructed, magicalConstruction: true, skipSafetyChecks: false))
+                {
+                    built++;
+                    placed = true;
+                    this.Logger.Debug($"Built {cabinType} at ({tile.X}, {tile.Y})");
+                    break;
+                }
+            }
+
+            // If random fails, scan the farm systematically
+            if (!placed)
+            {
+                var layer = farm.Map?.Layers?[0];
+                if (layer != null)
+                {
+                    for (int x = 1; x < layer.LayerWidth - 5 && !placed; x += 3)
+                    {
+                        for (int y = 1; y < layer.LayerHeight - 5 && !placed; y += 3)
+                        {
+                            var tile = new Microsoft.Xna.Framework.Vector2(x, y);
+                            if (farm.buildStructure(cabinType, tile, Game1.player, out var constructed, magicalConstruction: true, skipSafetyChecks: false))
+                            {
+                                built++;
+                                placed = true;
+                                this.Logger.Debug($"Built {cabinType} at ({x}, {y}) via scan");
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (!placed)
+                this.Logger.Warn($"Could not find space for cabin #{existingCabins + i + 1} — farm may be too full");
+        }
+
+        this.Logger.Info($"Built {built}/{needed} additional cabins (total: {existingCabins + built})");
     }
 
     /// <summary>Attempt to auto-load a farm from the title menu.</summary>

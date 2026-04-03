@@ -44,6 +44,7 @@ public sealed class ModEntry : Mod
         this.Days = new DayManager(this.Logger, this.Config, this.Players, helper);
         this.Festivals = new FestivalManager(this.Logger, this.Config, this.Players);
         this.SaveCreator = new SaveCreator(this.Logger, this.Config);
+        this.SaveCreator.RegisterEvents(helper.Events);
         this.Bot = new ServerBot(this.Logger, this.Config, this.Players, this.Days, this.SaveCreator);
 
         this.Commands = new ConsoleCommands(

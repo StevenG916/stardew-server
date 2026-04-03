@@ -34,7 +34,7 @@ public sealed class ModConfig
     *********/
 
     /// <summary>Maximum number of farmhand players (determines cabin count). Default game limit is 7 (+ 1 host = 8 total). Can be expanded beyond 8 with mod support.</summary>
-    public int MaxPlayers { get; set; } = 11;
+    public int MaxPlayers { get; set; } = 12;
 
     /// <summary>Style of cabins to auto-build. Values: "wood", "stone", "plank"</summary>
     public string CabinStyle { get; set; } = "wood";

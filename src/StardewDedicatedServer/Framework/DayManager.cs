@@ -67,6 +67,8 @@ public sealed class DayManager
         if (this.Config.HeadlessMode)
         {
             HeadlessPatches.SetEnabled(true);
+            if (this.Config.NoXvfbMode)
+                NoXvfbPatches.SetEnabled(true);
             this.Logger.Debug("Rendering disabled again (headless mode restored)");
         }
 
@@ -246,6 +248,7 @@ public sealed class DayManager
                 // complete because Draw is skipped. Enabling rendering lets the
                 // game's normal transition run, then we disable it again on DayStarted.
                 HeadlessPatches.SetEnabled(false);
+                NoXvfbPatches.SetEnabled(false);
                 this.Logger.Debug("Rendering temporarily enabled for day transition");
 
                 // Set player sleep metadata
