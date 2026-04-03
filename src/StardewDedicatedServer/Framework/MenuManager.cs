@@ -65,8 +65,11 @@ public sealed class MenuManager
         switch (menu)
         {
             case ShippingMenu:
-                this.Logger.Debug("Auto-dismissing ShippingMenu");
-                this.menuDismissCountdown = 5; // ~83ms delay
+                // Don't auto-dismiss — let the game's endOfNightMenus stack
+                // ShippingMenu has an internal save flow: intro → click OK → outro → save.
+                // We skip the intro and force outro to trigger the save.
+                this.Logger.Debug("ShippingMenu detected — will fast-forward");
+                this.menuDismissCountdown = 30;
                 break;
 
             case LevelUpMenu:
@@ -123,10 +126,43 @@ public sealed class MenuManager
         {
             switch (menu)
             {
-                case ShippingMenu:
-                    // Click through the shipping results
-                    menu.exitThisMenu(playSound: false);
-                    this.Logger.Debug("Dismissed ShippingMenu");
+                case ShippingMenu shippingMenu:
+                    // ShippingMenu has an internal outro → save → exit flow.
+                    // Skip ALL animations and force the save to happen immediately.
+                    try
+                    {
+                        var flags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
+
+                        // Skip intro and outro animations
+                        typeof(ShippingMenu).GetField("introTimer", flags)?.SetValue(shippingMenu, 0);
+                        typeof(ShippingMenu).GetField("outro", flags)?.SetValue(shippingMenu, true);
+                        typeof(ShippingMenu).GetField("outroFadeTimer", flags)?.SetValue(shippingMenu, 0);
+                        typeof(ShippingMenu).GetField("outroPauseBeforeDateChange", flags)?.SetValue(shippingMenu, 0);
+                        typeof(ShippingMenu).GetField("newDayPlaque", flags)?.SetValue(shippingMenu, true);
+                        typeof(ShippingMenu).GetField("savedYet", flags)?.SetValue(shippingMenu, false);
+
+                        // Force dayPlaqueY to target so the animation check passes
+                        var centerY = shippingMenu.yPositionOnScreen + shippingMenu.height / 2;
+                        typeof(ShippingMenu).GetField("dayPlaqueY", flags)?.SetValue(shippingMenu, centerY);
+
+                        // Set finalOutroTimer to 0 so _hasFinished triggers after save
+                        typeof(ShippingMenu).GetField("finalOutroTimer", flags)?.SetValue(shippingMenu, 0);
+
+                        // Create the internal SaveGameMenu that ShippingMenu manages
+                        var saveField = typeof(ShippingMenu).GetField("saveGameMenu", flags);
+                        if (saveField != null && saveField.GetValue(shippingMenu) == null)
+                        {
+                            saveField.SetValue(shippingMenu, new SaveGameMenu());
+                            this.Logger.Debug("Created internal SaveGameMenu for ShippingMenu");
+                        }
+
+                        this.Logger.Debug("Fast-forwarded ShippingMenu to save phase");
+                    }
+                    catch (Exception ex)
+                    {
+                        this.Logger.Error($"Failed to fast-forward ShippingMenu: {ex.Message}");
+                        shippingMenu.exitThisMenu(playSound: false);
+                    }
                     break;
 
                 case LevelUpMenu levelUp:

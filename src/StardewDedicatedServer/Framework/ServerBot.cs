@@ -192,7 +192,10 @@ public sealed class ServerBot
             if (Game1.activeClickableMenu != null && this.Config.AutoDismissMenus)
             {
                 string menuName = Game1.activeClickableMenu.GetType().Name;
-                if (menuName != "ReadyCheckDialog" && menuName != "SaveGameMenu")
+                // Don't force-close menus that are part of the day transition.
+                // These need to complete naturally via the endOfNightMenus stack.
+                if (menuName != "ReadyCheckDialog" && menuName != "SaveGameMenu"
+                    && menuName != "ShippingMenu" && menuName != "LevelUpMenu")
                 {
                     this.Logger.Debug($"Force-closing blocking menu: {menuName}");
                     Game1.activeClickableMenu.emergencyShutDown();

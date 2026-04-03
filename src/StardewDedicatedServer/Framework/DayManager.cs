@@ -70,15 +70,6 @@ public sealed class DayManager
         this.sleepDebounce = 0;
         this.lastSaveTime = Game1.timeOfDay;
 
-        // Re-enable headless mode after day transition completes
-        if (this.Config.HeadlessMode)
-        {
-            HeadlessPatches.SetEnabled(true);
-            if (this.Config.NoXvfbMode)
-                NoXvfbPatches.SetEnabled(true);
-            this.Logger.Debug("Rendering disabled again (headless mode restored)");
-        }
-
         string season = Game1.currentSeason ?? "unknown";
         season = char.ToUpper(season[0]) + season[1..];
         this.Logger.DayStarted(season, Game1.dayOfMonth, Game1.year);
@@ -98,6 +89,17 @@ public sealed class DayManager
     private void OnSaved(object? sender, SavedEventArgs e)
     {
         this.Logger.SaveComplete();
+
+        // Re-enable headless mode after save completes.
+        // Must be here (not DayStarted) because DayStarted fires BEFORE
+        // the ShippingMenu/SaveGameMenu end-of-night sequence.
+        if (this.Config.HeadlessMode && !HeadlessPatches.IsEnabled())
+        {
+            HeadlessPatches.SetEnabled(true);
+            if (this.Config.NoXvfbMode)
+                NoXvfbPatches.SetEnabled(true);
+            this.Logger.Debug("Rendering disabled again (headless mode restored)");
+        }
     }
 
     private void OnUpdateTicked(object? sender, UpdateTickedEventArgs e)
