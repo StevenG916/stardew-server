@@ -41,6 +41,9 @@ public sealed class ServerBot
     /// <summary>Whether we've already attempted to auto-load.</summary>
     private bool autoLoadAttempted;
 
+    /// <summary>Whether cabins still need to be checked/built.</summary>
+    private bool needsCabinCheck = true;
+
     /// <summary>Tick counter for delayed auto-load (give title menu time to initialize).</summary>
     private int autoLoadDelay = -1;
 
@@ -65,6 +68,7 @@ public sealed class ServerBot
     {
         events.GameLoop.UpdateTicked += this.OnUpdateTicked;
         events.GameLoop.SaveLoaded += this.OnSaveLoaded;
+        events.GameLoop.DayStarted += this.OnDayStarted;
         events.GameLoop.ReturnedToTitle += this.OnReturnedToTitle;
         events.GameLoop.GameLaunched += this.OnGameLaunched;
     }
@@ -120,6 +124,16 @@ public sealed class ServerBot
         // Log server ready with port
         int port = 24642; // Default Stardew Valley port
         this.Logger.ServerReady(port);
+    }
+
+    /// <summary>Handle day started — build cabins if needed (deferred from save load so building data is ready).</summary>
+    private void OnDayStarted(object? sender, DayStartedEventArgs e)
+    {
+        if (!Context.IsMainPlayer || !this.needsCabinCheck)
+            return;
+
+        this.needsCabinCheck = false;
+        this.EnsureCabins();
     }
 
     /// <summary>Handle returning to title (server crash recovery or intentional).</summary>
@@ -305,11 +319,11 @@ public sealed class ServerBot
         farmer.stamina = farmer.MaxStamina;
         farmer.health = farmer.maxHealth;
 
-        // Hide the bot from other players
-        farmer.hidden.Value = true;
+        // Don't set hidden.Value — it's a net field that can affect farmhands.
+        // The bot is invisible enough by being headless and auto-managed.
         farmer.ignoreCollisions = true;
 
-        this.Logger.Debug("Bot farmer state reset (hidden from players)");
+        this.Logger.Debug("Bot farmer state reset");
     }
 
     /// <summary>Enable multiplayer hosting on the current save.</summary>
@@ -348,9 +362,6 @@ public sealed class ServerBot
             {
                 this.Logger.Info($"Game server already running, type: {Game1.server.GetType().Name}");
             }
-
-            // Build cabins if needed
-            this.EnsureCabins();
 
             this.Logger.Info("Multiplayer hosting enabled");
 
@@ -393,61 +404,12 @@ public sealed class ServerBot
             return;
         }
 
-        this.Logger.Info($"Farm has {existingCabins} cabins, building {needed} more for {this.Config.MaxPlayers} max players");
-
-        // Map config cabin style to building type
-        string cabinType = this.Config.CabinStyle?.ToLowerInvariant() switch
-        {
-            "stone" => "Stone Cabin",
-            "plank" => "Plank Cabin",
-            _ => "Log Cabin"
-        };
-
-        int built = 0;
-        for (int i = 0; i < needed; i++)
-        {
-            bool placed = false;
-
-            // Try random positions (200 attempts)
-            for (int attempt = 0; attempt < 200; attempt++)
-            {
-                var tile = farm.getRandomTile();
-                if (farm.buildStructure(cabinType, tile, Game1.player, out var constructed, magicalConstruction: true, skipSafetyChecks: false))
-                {
-                    built++;
-                    placed = true;
-                    this.Logger.Debug($"Built {cabinType} at ({tile.X}, {tile.Y})");
-                    break;
-                }
-            }
-
-            // If random fails, scan the farm systematically
-            if (!placed)
-            {
-                var layer = farm.Map?.Layers?[0];
-                if (layer != null)
-                {
-                    for (int x = 1; x < layer.LayerWidth - 5 && !placed; x += 3)
-                    {
-                        for (int y = 1; y < layer.LayerHeight - 5 && !placed; y += 3)
-                        {
-                            var tile = new Microsoft.Xna.Framework.Vector2(x, y);
-                            if (farm.buildStructure(cabinType, tile, Game1.player, out var constructed, magicalConstruction: true, skipSafetyChecks: false))
-                            {
-                                built++;
-                                placed = true;
-                                this.Logger.Debug($"Built {cabinType} at ({x}, {y}) via scan");
-                            }
-                        }
-                    }
-                }
-            }
-
-            if (!placed)
-                this.Logger.Warn($"Could not find space for cabin #{existingCabins + i + 1} — farm may be too full");
-        }
-
-        this.Logger.Info($"Built {built}/{needed} additional cabins (total: {existingCabins + built})");
+        // Don't auto-build cabins — force-placed cabins create half-initialized
+        // farmhand slots that cause invisible players and shared cabin bugs.
+        // Players should build additional cabins through Robin in-game.
+        // The player limit patch allows Robin to build up to MaxPlayers-1 cabins.
+        this.Logger.Info($"Farm has {existingCabins} cabins, need {needed} more for {this.Config.MaxPlayers} players");
+        this.Logger.Info("Build additional cabins through Robin's shop (player limit expanded)");
     }
 
     /// <summary>Attempt to auto-load a farm from the title menu.</summary>
