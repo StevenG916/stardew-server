@@ -106,6 +106,12 @@ public sealed class ServerBot
         // Enable multiplayer
         this.EnableMultiplayer();
 
+        // Make sure game is NOT paused on load
+        if (Game1.netWorldState?.Value != null)
+        {
+            Game1.netWorldState.Value.IsPaused = false;
+        }
+
         // Log server ready with port
         int port = 24642; // Default Stardew Valley port
         this.Logger.ServerReady(port);
@@ -152,13 +158,46 @@ public sealed class ServerBot
         if (!Context.IsWorldReady || !Context.IsMainPlayer)
             return;
 
-        // Keep bot farmer healthy
+        // Keep bot farmer healthy and clear blocking state
         if (e.IsMultipleOf(60)) // Every second
         {
             this.MaintainBotHealth();
 
             // Periodically try to resolve player names (they may not be available at connect time)
             this.Players.RefreshPlayerNames();
+
+            // CRITICAL: Force-clear any menus/dialogues on the host
+            // In multiplayer, time freezes when the HOST has a menu open.
+            if (Game1.activeClickableMenu != null && this.Config.AutoDismissMenus)
+            {
+                string menuName = Game1.activeClickableMenu.GetType().Name;
+                // Don't close ReadyCheckDialog for sleep — let it resolve naturally
+                if (menuName != "ReadyCheckDialog")
+                {
+                    this.Logger.Debug($"Force-closing blocking menu: {menuName}");
+                    Game1.activeClickableMenu.emergencyShutDown();
+                    Game1.exitActiveMenu();
+                }
+            }
+
+            // Clear dialogue state
+            if (Game1.dialogueUp)
+                Game1.dialogueUp = false;
+
+            // CRITICAL: Make sure the host is NOT stuck in bed
+            // This was causing time freezes — previous sleep attempts left
+            // isInBed=true which makes the game think a sleep is in progress
+            if (Game1.player.isInBed.Value && this.Players.AnyConnected)
+            {
+                Game1.player.isInBed.Value = false;
+                Game1.player.passedOut = false;
+                Game1.player.timeWentToBed.Value = 0;
+                Game1.player.sleptInTemporaryBed.Value = false;
+            }
+
+            // Force unfreeze
+            Game1.freezeControls = false;
+            Game1.paused = false;
         }
 
         // Handle pause countdown
@@ -172,6 +211,8 @@ public sealed class ServerBot
     /// <summary>Called when the connected player count changes.</summary>
     private void OnPlayerCountChanged(int playerCount)
     {
+        this.Logger.Info($"Player count changed to {playerCount}");
+
         if (!this.Config.PauseWhenEmpty)
             return;
 

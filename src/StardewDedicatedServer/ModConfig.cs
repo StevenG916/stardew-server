@@ -43,7 +43,7 @@ public sealed class ModConfig
     public string ServerMessage { get; set; } = "Welcome to the Stardew Valley dedicated server!";
 
     /// <summary>Whether to pause the game when no players are connected.</summary>
-    public bool PauseWhenEmpty { get; set; } = true;
+    public bool PauseWhenEmpty { get; set; } = false;
 
     /// <summary>Delay in seconds before pausing after last player disconnects.</summary>
     public int PauseDelay { get; set; } = 30;

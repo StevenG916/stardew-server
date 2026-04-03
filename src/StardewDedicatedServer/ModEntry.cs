@@ -40,7 +40,7 @@ public sealed class ModEntry : Mod
         this.Logger = new ServerLogger(this.Monitor, this.Config.VerboseLogging);
         this.Players = new PlayerManager(this.Logger, this.Config);
         this.Menus = new MenuManager(this.Logger, this.Config);
-        this.Days = new DayManager(this.Logger, this.Config, this.Players);
+        this.Days = new DayManager(this.Logger, this.Config, this.Players, helper);
         this.Festivals = new FestivalManager(this.Logger, this.Config, this.Players);
         this.Bot = new ServerBot(this.Logger, this.Config, this.Players);
 
