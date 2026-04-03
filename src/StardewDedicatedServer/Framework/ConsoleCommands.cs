@@ -74,7 +74,7 @@ public sealed class ConsoleCommands
 
         var sb = new StringBuilder();
         sb.AppendLine("=== Server Status ===");
-        sb.AppendLine($"  Farm: {Game1.player?.farmName ?? "Unknown"}");
+        sb.AppendLine($"  Farm: {Game1.player?.farmName?.Value ?? "Unknown"}");
         sb.AppendLine($"  Date: {Game1.currentSeason} {Game1.dayOfMonth}, Year {Game1.year}");
         sb.AppendLine($"  Time: {this.FormatGameTime(Game1.timeOfDay)}");
         sb.AppendLine($"  Weather: {this.GetWeatherString()}");

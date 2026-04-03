@@ -167,8 +167,6 @@ public sealed class DayManager
             // Trigger the sleep dialogue/process
             // The game checks if all players are in bed during its update loop
             // and automatically advances the day when they are
-            host.startedJunimoKartRecently = false; // reset any blocking state
-
             this.Logger.Debug("Host bot is now in bed");
         }
         catch (Exception ex)

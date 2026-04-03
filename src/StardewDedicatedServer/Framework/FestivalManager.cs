@@ -110,7 +110,7 @@ public sealed class FestivalManager
                 // Look for festival-related questions
                 // Auto-accept by selecting "Yes" (typically the first response)
                 var responses = dialogue.responses;
-                if (responses != null && responses.Count > 0)
+                if (responses != null && responses.Length > 0)
                 {
                     // Select the first response (usually "Yes" / affirmative)
                     // Use a small delay to avoid immediate dismissal issues

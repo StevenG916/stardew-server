@@ -1,9 +1,13 @@
 using System;
+using System.IO;
+using System.Linq;
+using System.Reflection;
 using HarmonyLib;
 using StardewModdingAPI;
 using StardewModdingAPI.Events;
 using StardewValley;
 using StardewValley.Menus;
+using StardewValley.Network;
 
 namespace StardewDedicatedServer.Framework;
 
@@ -30,6 +34,12 @@ public sealed class ServerBot
 
     /// <summary>Whether the initial farm setup is complete.</summary>
     private bool farmSetupComplete;
+
+    /// <summary>Whether we've already attempted to auto-load.</summary>
+    private bool autoLoadAttempted;
+
+    /// <summary>Tick counter for delayed auto-load (give title menu time to initialize).</summary>
+    private int autoLoadDelay = -1;
 
     /*********
     ** Public Methods
@@ -62,6 +72,13 @@ public sealed class ServerBot
         harmony.Patch(
             original: AccessTools.Method(typeof(Farmer), nameof(Farmer.doneEating)),
             prefix: new HarmonyMethod(typeof(ServerBot), nameof(BeforeDoneEating))
+        );
+
+        // Patch checkFarmhandRequest to handle null values (LAN without Galaxy SDK)
+        harmony.Patch(
+            original: AccessTools.Method(typeof(GameServer), "checkFarmhandRequest"),
+            prefix: new HarmonyMethod(typeof(ServerBot), nameof(BeforeCheckFarmhandRequest)),
+            finalizer: new HarmonyMethod(typeof(ServerBot), nameof(FinalizerCheckFarmhandRequest))
         );
     }
 
@@ -100,21 +117,38 @@ public sealed class ServerBot
         this.farmSetupComplete = false;
         this.isPausedEmpty = false;
         this.pauseCountdown = -1;
+        this.autoLoadAttempted = false;
+        this.autoLoadDelay = -1;
         this.Players.Reset();
 
-        this.Logger.Warn("Returned to title screen");
-
-        // If AutoCreateFarm is on, we could try to reload here
-        if (this.Config.AutoCreateFarm)
-        {
-            this.Logger.Info("Attempting to reload farm...");
-            // Title menu handling will be done by the title screen automation
-        }
+        this.Logger.Warn("Returned to title screen — will attempt auto-reload");
     }
 
     /// <summary>Per-tick update for bot management.</summary>
     private void OnUpdateTicked(object? sender, UpdateTickedEventArgs e)
     {
+        // Handle auto-load from title screen (before world is ready)
+        if (!this.farmSetupComplete && !this.autoLoadAttempted)
+        {
+            if (Game1.activeClickableMenu is TitleMenu && this.autoLoadDelay < 0)
+            {
+                // Start countdown — give title menu 3 seconds to fully initialize
+                this.autoLoadDelay = 180;
+                this.Logger.Debug("Title menu detected, waiting to auto-load...");
+            }
+
+            if (this.autoLoadDelay > 0)
+            {
+                this.autoLoadDelay--;
+            }
+            else if (this.autoLoadDelay == 0)
+            {
+                this.autoLoadDelay = -1;
+                this.TryAutoLoadFarm();
+            }
+        }
+
+        // Everything below requires world to be ready
         if (!Context.IsWorldReady || !Context.IsMainPlayer)
             return;
 
@@ -124,12 +158,6 @@ public sealed class ServerBot
 
         // Handle pause countdown
         this.UpdatePauseState();
-
-        // Handle title menu (auto-load farm)
-        if (!this.farmSetupComplete && Game1.activeClickableMenu is TitleMenu)
-        {
-            this.TryAutoLoadFarm();
-        }
     }
 
     /*********
@@ -213,20 +241,49 @@ public sealed class ServerBot
     {
         try
         {
-            // Set the game to allow connections
+            // Enable the server
             Game1.options.enableServer = true;
-            Game1.options.serverPrivacy = ServerPrivacy.FriendsOnly; // Can be made configurable
+            Game1.options.serverPrivacy = ServerPrivacy.FriendsOnly;
 
-            // Ensure the server is started
+            // The game should auto-start the server when enableServer is true and a co-op save is loaded.
+            // If it hasn't started yet, try toggling the option to trigger it.
             if (Game1.server == null)
             {
+                this.Logger.Info("Server not yet initialized, toggling enableServer...");
+                Game1.options.enableServer = false;
                 Game1.options.enableServer = true;
+            }
+
+            // If still null after a short delay, try StartServer via reflection
+            if (Game1.server == null)
+            {
+                this.Logger.Info("Attempting StartServer() via reflection...");
+                var multiplayer = typeof(Game1)
+                    .GetField("multiplayer", BindingFlags.Static | BindingFlags.NonPublic)?
+                    .GetValue(null) as Multiplayer;
+
+                multiplayer?.StartServer();
+            }
+            else
+            {
+                this.Logger.Info($"Game server already running, type: {Game1.server.GetType().Name}");
             }
 
             // Build cabins if needed
             this.EnsureCabins();
 
             this.Logger.Info("Multiplayer hosting enabled");
+
+            // Log connection info
+            if (Game1.server != null)
+            {
+                this.Logger.Info($"Server type: {Game1.server.GetType().Name}");
+                this.Logger.Info("Players can connect via LAN or invite code");
+            }
+            else
+            {
+                this.Logger.Warn("Server object is still null — multiplayer may not be fully initialized");
+            }
         }
         catch (Exception ex)
         {
@@ -259,13 +316,91 @@ public sealed class ServerBot
     /// <summary>Attempt to auto-load a farm from the title menu.</summary>
     private void TryAutoLoadFarm()
     {
-        // This is a simplified handler. Full implementation would:
-        // 1. Check if a save exists matching Config.SaveFileName
-        // 2. If yes, load it
-        // 3. If no, create a new farm with Config settings
-        // For now, we log the intent for manual testing
+        this.autoLoadAttempted = true;
 
-        this.Logger.Debug("Title menu detected — auto-load will be implemented during testing");
+        try
+        {
+            // Find the save to load
+            string? saveName = this.FindSaveToLoad();
+            if (saveName == null)
+            {
+                this.Logger.Warn("No save file found. Please create a farm first or set SaveFileName in config.");
+                return;
+            }
+
+            this.Logger.Info($"Auto-loading save: {saveName}");
+
+            // Use the game's save loading mechanism
+            // SaveGame.Load triggers the full load pipeline
+            Game1.activeClickableMenu = null;
+            SaveGame.Load(saveName);
+
+            this.Logger.Info($"Save load initiated for: {saveName}");
+        }
+        catch (Exception ex)
+        {
+            this.Logger.Error($"Failed to auto-load farm: {ex.Message}");
+        }
+    }
+
+    /// <summary>Find a save file to load based on config or most recent.</summary>
+    /// <returns>The save folder name, or null if none found.</returns>
+    private string? FindSaveToLoad()
+    {
+        // If a specific save is configured, use that
+        if (!string.IsNullOrWhiteSpace(this.Config.SaveFileName))
+        {
+            string savePath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "StardewValley", "Saves", this.Config.SaveFileName
+            );
+
+            // Also check XDG config path (Linux)
+            string linuxSavePath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                ".config", "StardewValley", "Saves", this.Config.SaveFileName
+            );
+
+            if (Directory.Exists(savePath) || Directory.Exists(linuxSavePath))
+            {
+                this.Logger.Debug($"Found configured save: {this.Config.SaveFileName}");
+                return this.Config.SaveFileName;
+            }
+
+            this.Logger.Warn($"Configured save '{this.Config.SaveFileName}' not found");
+        }
+
+        // Otherwise, find the most recent save
+        string[] searchPaths = new[]
+        {
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "StardewValley", "Saves"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".config", "StardewValley", "Saves")
+        };
+
+        DirectoryInfo? mostRecent = null;
+
+        foreach (string searchPath in searchPaths)
+        {
+            if (!Directory.Exists(searchPath))
+                continue;
+
+            var saves = new DirectoryInfo(searchPath)
+                .GetDirectories()
+                .Where(d => File.Exists(Path.Combine(d.FullName, "SaveGameInfo")))
+                .OrderByDescending(d => d.LastWriteTimeUtc);
+
+            var newest = saves.FirstOrDefault();
+            if (newest != null && (mostRecent == null || newest.LastWriteTimeUtc > mostRecent.LastWriteTimeUtc))
+                mostRecent = newest;
+        }
+
+        if (mostRecent != null)
+        {
+            this.Logger.Debug($"Found most recent save: {mostRecent.Name}");
+            return mostRecent.Name;
+        }
+
+        return null;
     }
 
     /*********
@@ -281,5 +416,79 @@ public sealed class ServerBot
             return false; // Skip original method
 
         return true; // Let farmhands eat normally
+    }
+
+    /// <summary>
+    /// Prefix patch on checkFarmhandRequest to guard against null references.
+    /// The original method's Check() local function accesses:
+    ///   - Game1.netWorldState.Value.farmhandData[...]  (line 528)
+    ///   - Game1.serverHost.Value.UniqueMultiplayerID   (line 543)
+    /// Either can be null on a headless Linux server without Galaxy SDK.
+    /// If critical objects are null, we reject the request gracefully instead of crashing.
+    /// </summary>
+    [HarmonyPrefix]
+    private static bool BeforeCheckFarmhandRequest(
+        GameServer __instance, ref string userId, string connectionId,
+        NetFarmerRoot farmer, Action<OutgoingMessage> sendMessage, Action approve)
+    {
+        // Fix empty userId (LidgrenServer always passes "")
+        if (string.IsNullOrEmpty(userId))
+        {
+            userId = "";
+        }
+
+        // Check for null farmer
+        if (farmer?.Value == null)
+        {
+            System.Console.WriteLine("[SERVER] Rejecting farmhand request: farmer is null");
+            return true; // Let original handle it (it has a null check)
+        }
+
+        // Guard against null netWorldState — the critical null that causes the crash
+        if (Game1.netWorldState?.Value == null)
+        {
+            System.Console.WriteLine("[SERVER] Rejecting farmhand request: netWorldState not ready yet");
+            // Send available farmhands instead (which shows the cabin selection screen)
+            // This is what the game does when isGameAvailable() returns false
+            try
+            {
+                typeof(GameServer)
+                    .GetMethod("sendAvailableFarmhands", BindingFlags.NonPublic | BindingFlags.Instance)?
+                    .Invoke(__instance, new object[] { userId, connectionId, sendMessage });
+            }
+            catch (Exception ex)
+            {
+                System.Console.WriteLine($"[SERVER] sendAvailableFarmhands fallback failed: {ex.Message}");
+            }
+            return false; // Skip original
+        }
+
+        // Guard against null serverHost
+        if (Game1.serverHost?.Value == null)
+        {
+            System.Console.WriteLine("[SERVER] Initializing serverHost before farmhand check...");
+            if (Game1.serverHost == null)
+            {
+                Game1.serverHost = new NetFarmerRoot();
+            }
+            Game1.serverHost.Value = Game1.player;
+        }
+
+        return true; // Let original run — all null guards passed
+    }
+
+    /// <summary>
+    /// Finalizer as safety net — catches any remaining NullReferenceException
+    /// and suppresses it so the server doesn't crash.
+    /// </summary>
+    [HarmonyFinalizer]
+    private static Exception? FinalizerCheckFarmhandRequest(Exception? __exception)
+    {
+        if (__exception != null)
+        {
+            System.Console.WriteLine($"[SERVER] checkFarmhandRequest error caught: {__exception.GetType().Name}: {__exception.Message}");
+            return null; // Suppress — don't crash the server
+        }
+        return null;
     }
 }
