@@ -195,9 +195,37 @@ public sealed class ServerBot
                 Game1.player.sleptInTemporaryBed.Value = false;
             }
 
-            // Force unfreeze
+            // Force unfreeze everything
             Game1.freezeControls = false;
             Game1.paused = false;
+            Game1.player.requestingTimePause.Value = false;
+
+            // Force ALL farmers to not request time pause
+            foreach (var farmer in Game1.getOnlineFarmers())
+            {
+                if (farmer.requestingTimePause.Value)
+                {
+                    this.Logger.Debug($"Clearing requestingTimePause for {farmer.Name} (ID: {farmer.UniqueMultiplayerID})");
+                    farmer.requestingTimePause.Value = false;
+                }
+            }
+
+            // Make sure netWorldState time is not paused
+            if (Game1.netWorldState?.Value != null)
+            {
+                if (Game1.netWorldState.Value.IsTimePaused)
+                {
+                    this.Logger.Debug("Clearing IsTimePaused on netWorldState");
+                }
+                Game1.netWorldState.Value.IsTimePaused = false;
+                Game1.netWorldState.Value.UpdateFromGame1();
+            }
+
+            // Log time state for debugging
+            if (Game1.timeOfDay % 100 == 0) // Log every game hour
+            {
+                this.Logger.Info($"Time: {Game1.timeOfDay}, shouldTimePass: {Game1.shouldTimePass()}, IsTimePaused: {Game1.netWorldState?.Value?.IsTimePaused}");
+            }
         }
 
         // Handle pause countdown
