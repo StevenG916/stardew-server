@@ -23,6 +23,7 @@ public sealed class ModEntry : Mod
     private MenuManager Menus = null!;
     private DayManager Days = null!;
     private FestivalManager Festivals = null!;
+    private SaveCreator SaveCreator = null!;
     private ServerBot Bot = null!;
 
     /*********
@@ -42,7 +43,8 @@ public sealed class ModEntry : Mod
         this.Menus = new MenuManager(this.Logger, this.Config);
         this.Days = new DayManager(this.Logger, this.Config, this.Players, helper);
         this.Festivals = new FestivalManager(this.Logger, this.Config, this.Players);
-        this.Bot = new ServerBot(this.Logger, this.Config, this.Players);
+        this.SaveCreator = new SaveCreator(this.Logger, this.Config);
+        this.Bot = new ServerBot(this.Logger, this.Config, this.Players, this.Days, this.SaveCreator);
 
         this.Commands = new ConsoleCommands(
             this.Logger,

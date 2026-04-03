@@ -4,6 +4,7 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using StardewModdingAPI;
 using StardewValley;
+using StardewValley.Menus;
 
 namespace StardewDedicatedServer.Framework.Patches;
 
@@ -65,7 +66,15 @@ public static class HeadlessPatches
             postfix: new HarmonyMethod(typeof(HeadlessPatches), nameof(AfterUpdate))
         );
 
-        logger.Info("Headless rendering patches applied (chatBox.update relocated to Update loop)");
+        // Patch 4: Skip ReadyCheckDialog.draw to prevent GPU calls during sleep
+        // ReadyCheckDialog is used for multiplayer sleep coordination but its draw
+        // method calls SpriteBatch operations that crash without a GPU context.
+        harmony.Patch(
+            original: AccessTools.Method(typeof(ReadyCheckDialog), "draw", new[] { typeof(SpriteBatch) }),
+            prefix: new HarmonyMethod(typeof(HeadlessPatches), nameof(BeforeReadyCheckDialogDraw))
+        );
+
+        logger.Info("Headless rendering patches applied (chatBox.update relocated to Update loop, ReadyCheckDialog.draw skipped)");
     }
 
     /// <summary>
@@ -129,6 +138,18 @@ public static class HeadlessPatches
         {
             // Ignore — chatBox may not be initialized yet
         }
+    }
+
+    /// <summary>
+    /// Skip ReadyCheckDialog.draw in headless mode.
+    /// This dialog is created during multiplayer sleep coordination and its
+    /// draw method makes SpriteBatch calls that crash without a GPU.
+    /// The dialog's update/logic still runs — only rendering is skipped.
+    /// </summary>
+    [HarmonyPrefix]
+    private static bool BeforeReadyCheckDialogDraw()
+    {
+        return !isEnabled; // Skip draw in headless mode
     }
 
     /// <summary>Enable or disable headless mode at runtime.</summary>

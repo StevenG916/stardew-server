@@ -1,4 +1,6 @@
 using System;
+using System.Reflection;
+using StardewDedicatedServer.Framework.Patches;
 using StardewModdingAPI;
 using StardewModdingAPI.Events;
 using StardewValley;
@@ -9,45 +11,35 @@ namespace StardewDedicatedServer.Framework;
 
 /// <summary>
 /// Manages day transitions for the dedicated server.
-/// Monitors when all real players are in bed and triggers the host bot to sleep,
-/// advancing the day. Uses the same approach as SMAPIDedicatedServerMod:
-/// warp to FarmHouse → set bed flags → call startSleep() → create ReadyCheckDialog.
+/// Monitors when all real players are in bed and triggers the host bot to sleep
+/// using the game's actual multiplayer sleep coordination system:
+/// SetLocalReady("sleep") + ReadyCheckDialog.
 /// </summary>
 public sealed class DayManager
 {
-    /*********
-    ** Fields
-    *********/
-
     private readonly ServerLogger Logger;
     private readonly ModConfig Config;
     private readonly PlayerManager Players;
     private readonly IModHelper Helper;
 
-    /// <summary>Current sleep state of the bot.</summary>
     private SleepState sleepState = SleepState.Awake;
-
-    /// <summary>Tick counter for periodic bed-check polling.</summary>
     private int bedCheckTimer;
+    private int sleepDebounce;
 
-    /// <summary>How often (in ticks) to check if all players are in bed. 60 ticks = ~1 second.</summary>
-    private const int BedCheckInterval = 60;
-
-    /*********
-    ** Sleep States
-    *********/
+    private const int BedCheckInterval = 60; // ~1 second
+    private const int SleepDebounceTicks = 300; // ~5 seconds between attempts
 
     private enum SleepState
     {
         Awake,
         WarpingToFarmHouse,
         ReadyToSleep,
-        Sleeping
+        Sleeping,
+        Debouncing
     }
 
-    /*********
-    ** Public Methods
-    *********/
+    /// <summary>Whether the host is currently in any stage of the sleep process.</summary>
+    public bool IsSleeping => this.sleepState != SleepState.Awake && this.sleepState != SleepState.Debouncing;
 
     public DayManager(ServerLogger logger, ModConfig config, PlayerManager players, IModHelper helper)
     {
@@ -57,7 +49,6 @@ public sealed class DayManager
         this.Helper = helper;
     }
 
-    /// <summary>Register event handlers.</summary>
     public void RegisterEvents(IModEvents events)
     {
         events.GameLoop.DayStarted += this.OnDayStarted;
@@ -67,41 +58,39 @@ public sealed class DayManager
         events.GameLoop.UpdateTicked += this.OnUpdateTicked;
     }
 
-    /*********
-    ** Private Methods
-    *********/
-
-    /// <summary>Handle the start of a new day.</summary>
     private void OnDayStarted(object? sender, DayStartedEventArgs e)
     {
         this.sleepState = SleepState.Awake;
+        this.sleepDebounce = 0;
+
+        // Re-enable headless mode after day transition completes
+        if (this.Config.HeadlessMode)
+        {
+            HeadlessPatches.SetEnabled(true);
+            this.Logger.Debug("Rendering disabled again (headless mode restored)");
+        }
 
         string season = Game1.currentSeason ?? "unknown";
         season = char.ToUpper(season[0]) + season[1..];
-
         this.Logger.DayStarted(season, Game1.dayOfMonth, Game1.year);
     }
 
-    /// <summary>Handle end of day (before save).</summary>
     private void OnDayEnding(object? sender, DayEndingEventArgs e)
     {
         this.Logger.Debug("Day ending...");
         this.sleepState = SleepState.Awake;
     }
 
-    /// <summary>Handle save starting.</summary>
     private void OnSaving(object? sender, SavingEventArgs e)
     {
         this.Logger.Saving();
     }
 
-    /// <summary>Handle save completed.</summary>
     private void OnSaved(object? sender, SavedEventArgs e)
     {
         this.Logger.SaveComplete();
     }
 
-    /// <summary>Per-tick check: if all real players are in bed, put the host to bed too.</summary>
     private void OnUpdateTicked(object? sender, UpdateTickedEventArgs e)
     {
         if (!Context.IsWorldReady || !Context.IsMainPlayer)
@@ -110,24 +99,19 @@ public sealed class DayManager
         if (!this.Config.AutoSleep)
             return;
 
-        // Handle sleep state machine
         switch (this.sleepState)
         {
             case SleepState.Awake:
-                // Poll periodically
                 this.bedCheckTimer++;
                 if (this.bedCheckTimer < BedCheckInterval)
                     return;
                 this.bedCheckTimer = 0;
 
                 if (this.ShouldSleep())
-                {
                     this.StartSleepProcess();
-                }
                 break;
 
             case SleepState.WarpingToFarmHouse:
-                // Wait until we're in the FarmHouse
                 if (Game1.currentLocation is FarmHouse)
                 {
                     this.sleepState = SleepState.ReadyToSleep;
@@ -137,29 +121,38 @@ public sealed class DayManager
 
             case SleepState.ReadyToSleep:
             case SleepState.Sleeping:
-                // Waiting for game to process sleep / day transition
-                // If we somehow got un-slept (cancelled), go back to Awake
+                // If we're in save flow, stay in Sleeping state
+                if (Game1.activeClickableMenu is SaveGameMenu)
+                    break;
+
+                // If sleep was cancelled (dialog closed, not in bed anymore)
                 if (!(Game1.activeClickableMenu is ReadyCheckDialog) && !Game1.player.isInBed.Value)
                 {
-                    this.Logger.Debug("Sleep was cancelled or interrupted, returning to Awake");
+                    this.Logger.Debug("Sleep was cancelled or interrupted, debouncing...");
+                    this.sleepState = SleepState.Debouncing;
+                    this.sleepDebounce = SleepDebounceTicks;
+                }
+                break;
+
+            case SleepState.Debouncing:
+                this.sleepDebounce--;
+                if (this.sleepDebounce <= 0)
+                {
                     this.sleepState = SleepState.Awake;
+                    this.Logger.Debug("Sleep debounce complete, ready to retry");
                 }
                 break;
         }
     }
 
-    /// <summary>Check if the bot should go to sleep.</summary>
     private bool ShouldSleep()
     {
-        // If no one is connected, don't auto-sleep
         if (!this.Players.AnyConnected)
             return false;
 
-        // Don't try to sleep before 6pm game time — players just connected
         if (Game1.timeOfDay < 1800)
             return false;
 
-        // Count real players and how many are in bed
         int totalFarmhands = 0;
         int inBedCount = 0;
 
@@ -170,13 +163,10 @@ public sealed class DayManager
 
             totalFarmhands++;
 
-            // Only count as "in bed" if they're actually in a bed location
-            // not just because the flag happens to be set
             if (farmer.isInBed.Value && farmer.currentLocation is FarmHouse)
                 inBedCount++;
         }
 
-        // Need at least 1 farmhand AND all must be in bed
         if (totalFarmhands == 0)
             return false;
 
@@ -188,20 +178,17 @@ public sealed class DayManager
         return shouldSleep;
     }
 
-    /// <summary>Start the sleep process — warp to FarmHouse first if needed.</summary>
     private void StartSleepProcess()
     {
         this.Logger.Info("All players in bed — initiating host sleep");
 
         if (Game1.currentLocation is FarmHouse)
         {
-            // Already in FarmHouse, go directly to sleep
             this.sleepState = SleepState.ReadyToSleep;
             this.DoSleep();
         }
         else
         {
-            // Warp to FarmHouse first
             this.sleepState = SleepState.WarpingToFarmHouse;
             var farmHouse = Game1.getLocationFromName("FarmHouse") as FarmHouse;
             if (farmHouse != null)
@@ -219,9 +206,9 @@ public sealed class DayManager
     }
 
     /// <summary>
-    /// Trigger the actual sleep. Sets bed flags only — no ReadyCheckDialog
-    /// (it crashes in headless mode). The game's network sync should detect
-    /// that all players have isInBed=true and advance the day.
+    /// Trigger sleep using the game's actual multiplayer sleep coordination.
+    /// Sets bed flags, marks the host as ready for sleep via FarmerTeam,
+    /// and creates a ReadyCheckDialog so the game's sync detects all-sleeping.
     /// </summary>
     private void DoSleep()
     {
@@ -229,24 +216,56 @@ public sealed class DayManager
         {
             var host = Game1.player;
 
-            // Set all the bed state flags
+            // Set bed state flags
             host.isInBed.Value = true;
             host.sleptInTemporaryBed.Value = true;
             host.timeWentToBed.Value = Game1.timeOfDay;
 
-            // Announce the host is sleeping
+            // Add to announced sleeping farmers
             if (!host.team.announcedSleepingFarmers.Contains(host))
-            {
                 host.team.announcedSleepingFarmers.Add(host);
-            }
+
+            // Mark host as ready for sleep via the game's ready check system.
+            // Game1.netReady is the ReadySynchronizer — this is the same call
+            // that FarmHouse.startSleep() makes in the normal game flow.
+            Game1.netReady.SetLocalReady("sleep", true);
+            Game1.dialogueUp = false;
+            this.Logger.Debug("Game1.netReady.SetLocalReady('sleep', true) called");
+
+            // Create ReadyCheckDialog with the same pattern as FarmHouse.startSleep().
+            // The dialog's update() calls SetLocalReady every frame and checks IsReady.
+            // When all players are ready, it calls the confirm callback which triggers doSleep.
+            // The draw method is patched out in HeadlessPatches so this won't crash.
+            Game1.activeClickableMenu = new ReadyCheckDialog("sleep", true, _ =>
+            {
+                this.Logger.Info("ReadyCheckDialog confirm — triggering day transition");
+
+                // Temporarily re-enable rendering for the day transition.
+                // Game1.NewDay() triggers screen fades whose completion callbacks
+                // drive the actual day advancement. In headless mode, fades never
+                // complete because Draw is skipped. Enabling rendering lets the
+                // game's normal transition run, then we disable it again on DayStarted.
+                HeadlessPatches.SetEnabled(false);
+                this.Logger.Debug("Rendering temporarily enabled for day transition");
+
+                // Set player sleep metadata
+                Game1.player.lastSleepLocation.Value = Game1.currentLocation?.NameOrUniqueName;
+                Game1.player.mostRecentBed = Game1.player.Position;
+
+                // Let the game's normal day transition handle everything
+                Game1.NewDay(0f);
+                this.Logger.Info("Game1.NewDay(0f) called — rendering enabled for transition");
+            });
 
             this.sleepState = SleepState.Sleeping;
-            this.Logger.Info("Host bot bed flags set — waiting for game sync");
+            this.Logger.Info("Host sleep initiated — ReadyCheckDialog created, waiting for day transition");
         }
         catch (Exception ex)
         {
             this.Logger.Error($"Failed to trigger host sleep: {ex.Message}");
-            this.sleepState = SleepState.Awake;
+            this.sleepState = SleepState.Debouncing;
+            this.sleepDebounce = SleepDebounceTicks;
         }
     }
+
 }

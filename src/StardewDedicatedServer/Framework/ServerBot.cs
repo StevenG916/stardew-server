@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Threading;
 using HarmonyLib;
 using StardewModdingAPI;
 using StardewModdingAPI.Events;
@@ -25,6 +26,8 @@ public sealed class ServerBot
     private readonly ServerLogger Logger;
     private readonly ModConfig Config;
     private readonly PlayerManager Players;
+    private readonly DayManager Days;
+    private readonly SaveCreator SaveCreator;
 
     /// <summary>Whether the server is currently paused due to no players.</summary>
     private bool isPausedEmpty;
@@ -45,11 +48,13 @@ public sealed class ServerBot
     ** Public Methods
     *********/
 
-    public ServerBot(ServerLogger logger, ModConfig config, PlayerManager players)
+    public ServerBot(ServerLogger logger, ModConfig config, PlayerManager players, DayManager days, SaveCreator saveCreator)
     {
         this.Logger = logger;
         this.Config = config;
         this.Players = players;
+        this.Days = days;
+        this.SaveCreator = saveCreator;
 
         // Listen for player count changes to handle pause/resume
         this.Players.PlayerCountChanged += this.OnPlayerCountChanged;
@@ -166,13 +171,13 @@ public sealed class ServerBot
             // Periodically try to resolve player names (they may not be available at connect time)
             this.Players.RefreshPlayerNames();
 
-            // CRITICAL: Force-clear any menus/dialogues on the host
-            // In multiplayer, time freezes when the HOST has a menu open.
+            // Force-clear blocking menus/dialogues on the host.
+            // Always dismiss menus EXCEPT ReadyCheckDialog and SaveGameMenu,
+            // which need to complete naturally for sleep/save to work.
             if (Game1.activeClickableMenu != null && this.Config.AutoDismissMenus)
             {
                 string menuName = Game1.activeClickableMenu.GetType().Name;
-                // Don't close ReadyCheckDialog for sleep — let it resolve naturally
-                if (menuName != "ReadyCheckDialog")
+                if (menuName != "ReadyCheckDialog" && menuName != "SaveGameMenu")
                 {
                     this.Logger.Debug($"Force-closing blocking menu: {menuName}");
                     Game1.activeClickableMenu.emergencyShutDown();
@@ -184,52 +189,44 @@ public sealed class ServerBot
             if (Game1.dialogueUp)
                 Game1.dialogueUp = false;
 
-            // CRITICAL: Make sure the host is NOT stuck in bed
-            // This was causing time freezes — previous sleep attempts left
-            // isInBed=true which makes the game think a sleep is in progress
-            if (Game1.player.isInBed.Value && this.Players.AnyConnected)
+            // Don't unfreeze controls during active sleep transition
+            if (!this.Days.IsSleeping)
             {
-                Game1.player.isInBed.Value = false;
-                Game1.player.passedOut = false;
-                Game1.player.timeWentToBed.Value = 0;
-                Game1.player.sleptInTemporaryBed.Value = false;
+                Game1.freezeControls = false;
+                Game1.paused = false;
             }
 
-            // Force unfreeze everything
-            Game1.freezeControls = false;
-            Game1.paused = false;
+            // Only clear the HOST's time pause request, not all farmers.
+            // Clearing other farmers' pause requests breaks the game's sync.
             Game1.player.requestingTimePause.Value = false;
 
-            // Force ALL farmers to not request time pause
-            foreach (var farmer in Game1.getOnlineFarmers())
-            {
-                if (farmer.requestingTimePause.Value)
-                {
-                    this.Logger.Debug($"Clearing requestingTimePause for {farmer.Name} (ID: {farmer.UniqueMultiplayerID})");
-                    farmer.requestingTimePause.Value = false;
-                }
-            }
-
-            // Make sure netWorldState time is not paused
-            if (Game1.netWorldState?.Value != null)
+            // Only clear IsTimePaused when we're not deliberately paused
+            if (Game1.netWorldState?.Value != null && !this.isPausedEmpty && !this.Days.IsSleeping)
             {
                 if (Game1.netWorldState.Value.IsTimePaused)
                 {
-                    this.Logger.Debug("Clearing IsTimePaused on netWorldState");
+                    this.Logger.Debug("Clearing stuck IsTimePaused on netWorldState");
+                    Game1.netWorldState.Value.IsTimePaused = false;
                 }
-                Game1.netWorldState.Value.IsTimePaused = false;
-                Game1.netWorldState.Value.UpdateFromGame1();
             }
 
             // Log time state for debugging
             if (Game1.timeOfDay % 100 == 0) // Log every game hour
             {
-                this.Logger.Info($"Time: {Game1.timeOfDay}, shouldTimePass: {Game1.shouldTimePass()}, IsTimePaused: {Game1.netWorldState?.Value?.IsTimePaused}");
+                this.Logger.Info($"Time: {Game1.timeOfDay}, shouldTimePass: {Game1.shouldTimePass()}, IsTimePaused: {Game1.netWorldState?.Value?.IsTimePaused}, sleeping: {this.Days.IsSleeping}");
             }
         }
 
         // Handle pause countdown
         this.UpdatePauseState();
+
+        // CPU idle throttle: when no players are connected and server is paused,
+        // sleep the thread briefly to reduce CPU from ~15% to <5%.
+        // Only throttle every 4th tick to avoid impacting responsiveness.
+        if (this.isPausedEmpty && e.IsMultipleOf(4))
+        {
+            Thread.Sleep(15);
+        }
     }
 
     /*********
@@ -307,7 +304,11 @@ public sealed class ServerBot
         farmer.stamina = farmer.MaxStamina;
         farmer.health = farmer.maxHealth;
 
-        this.Logger.Debug("Bot farmer state reset");
+        // Hide the bot from other players
+        farmer.hidden.Value = true;
+        farmer.ignoreCollisions = true;
+
+        this.Logger.Debug("Bot farmer state reset (hidden from players)");
     }
 
     /// <summary>Enable multiplayer hosting on the current save.</summary>
@@ -315,6 +316,10 @@ public sealed class ServerBot
     {
         try
         {
+            // Set multiplayer mode to server (2) — critical for time sync to clients.
+            // Mode 0 = single player, 1 = client, 2 = server/host
+            Game1.multiplayerMode = 2;
+
             // Enable the server
             Game1.options.enableServer = true;
             Game1.options.serverPrivacy = ServerPrivacy.FriendsOnly;
@@ -398,8 +403,25 @@ public sealed class ServerBot
             string? saveName = this.FindSaveToLoad();
             if (saveName == null)
             {
-                this.Logger.Warn("No save file found. Please create a farm first or set SaveFileName in config.");
-                return;
+                if (this.Config.AutoCreateFarm)
+                {
+                    this.Logger.Info("No save found — auto-creating new farm...");
+                    if (this.SaveCreator.TryCreateFarm())
+                    {
+                        this.Logger.Info("Farm creation initiated, waiting for world to load...");
+                        return;
+                    }
+                    else
+                    {
+                        this.Logger.Error("Auto-create farm failed.");
+                        return;
+                    }
+                }
+                else
+                {
+                    this.Logger.Warn("No save file found. Set AutoCreateFarm=true or create a farm manually.");
+                    return;
+                }
             }
 
             this.Logger.Info($"Auto-loading save: {saveName}");
