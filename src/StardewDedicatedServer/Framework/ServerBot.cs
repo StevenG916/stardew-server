@@ -415,8 +415,8 @@ public sealed class ServerBot
         {
             bool placed = false;
 
-            // Try random positions first
-            for (int attempt = 0; attempt < 50; attempt++)
+            // Try random positions first (500 attempts on the farm)
+            for (int attempt = 0; attempt < 500; attempt++)
             {
                 var tile = farm.getRandomTile();
                 if (farm.buildStructure(cabinType, tile, Game1.player, out var constructed, magicalConstruction: true, skipSafetyChecks: false))
@@ -428,17 +428,25 @@ public sealed class ServerBot
                 }
             }
 
-            // Force-place in a grid if random fails
+            // Systematic scan if random fails — walk the farm in a grid
             if (!placed)
             {
-                int baseX = 60 + (i * 5);
-                int baseY = 12;
-                var tile2 = new Microsoft.Xna.Framework.Vector2(baseX, baseY);
-                if (farm.buildStructure(cabinType, tile2, Game1.player, out var constructed2, magicalConstruction: true, skipSafetyChecks: true))
+                var layer = farm.Map?.Layers?[0];
+                if (layer != null)
                 {
-                    built++;
-                    placed = true;
-                    this.Logger.Debug($"Force-built cabin at ({baseX}, {baseY})");
+                    for (int y = 20; y < layer.LayerHeight - 10 && !placed; y += 4)
+                    {
+                        for (int x = 5; x < layer.LayerWidth - 10 && !placed; x += 4)
+                        {
+                            var tile = new Microsoft.Xna.Framework.Vector2(x, y);
+                            if (farm.buildStructure(cabinType, tile, Game1.player, out var constructed2, magicalConstruction: true, skipSafetyChecks: false))
+                            {
+                                built++;
+                                placed = true;
+                                this.Logger.Debug($"Built cabin at ({x}, {y}) via scan");
+                            }
+                        }
+                    }
                 }
             }
 
