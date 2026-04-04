@@ -394,20 +394,61 @@ public sealed class ServerBot
                 existingCabins++;
         }
 
-        // MaxPlayers is total including host, so we need MaxPlayers-1 cabins
-        int needed = (this.Config.MaxPlayers - 1) - existingCabins;
+        // MaxPlayers is total including host, so we need MaxPlayers-1 cabins.
+        // Cap auto-build at 8 total cabins — beyond that causes invisible player bugs.
+        int maxAutoCabins = 8;
+        int targetCabins = Math.Min(this.Config.MaxPlayers - 1, maxAutoCabins);
+        int needed = targetCabins - existingCabins;
         if (needed <= 0)
         {
-            this.Logger.Info($"Farm has {existingCabins} cabins — enough for {this.Config.MaxPlayers} players");
+            this.Logger.Info($"Farm has {existingCabins} cabins — enough for auto-build (max {maxAutoCabins})");
+            if (this.Config.MaxPlayers - 1 > maxAutoCabins)
+                this.Logger.Info($"Build additional cabins through Robin for {this.Config.MaxPlayers} total players");
             return;
         }
 
-        // Don't auto-build cabins — force-placed cabins create half-initialized
-        // farmhand slots that cause invisible players and shared cabin bugs.
-        // Players should build additional cabins through Robin in-game.
-        // The player limit patch allows Robin to build up to MaxPlayers-1 cabins.
-        this.Logger.Info($"Farm has {existingCabins} cabins, need {needed} more for {this.Config.MaxPlayers} players");
-        this.Logger.Info("Build additional cabins through Robin's shop (player limit expanded)");
+        this.Logger.Info($"Farm has {existingCabins} cabins, auto-building {needed} more (target: {targetCabins})");
+
+        string cabinType = "Cabin";
+        int built = 0;
+        for (int i = 0; i < needed; i++)
+        {
+            bool placed = false;
+
+            // Try random positions first
+            for (int attempt = 0; attempt < 50; attempt++)
+            {
+                var tile = farm.getRandomTile();
+                if (farm.buildStructure(cabinType, tile, Game1.player, out var constructed, magicalConstruction: true, skipSafetyChecks: false))
+                {
+                    built++;
+                    placed = true;
+                    this.Logger.Debug($"Built cabin at ({tile.X}, {tile.Y})");
+                    break;
+                }
+            }
+
+            // Force-place in a grid if random fails
+            if (!placed)
+            {
+                int baseX = 60 + (i * 5);
+                int baseY = 12;
+                var tile2 = new Microsoft.Xna.Framework.Vector2(baseX, baseY);
+                if (farm.buildStructure(cabinType, tile2, Game1.player, out var constructed2, magicalConstruction: true, skipSafetyChecks: true))
+                {
+                    built++;
+                    placed = true;
+                    this.Logger.Debug($"Force-built cabin at ({baseX}, {baseY})");
+                }
+            }
+
+            if (!placed)
+                this.Logger.Warn($"Could not place cabin #{existingCabins + i + 1}");
+        }
+
+        this.Logger.Info($"Built {built}/{needed} cabins (total: {existingCabins + built})");
+        if (this.Config.MaxPlayers - 1 > maxAutoCabins)
+            this.Logger.Info($"Build {this.Config.MaxPlayers - 1 - maxAutoCabins} more through Robin for full {this.Config.MaxPlayers} player support");
     }
 
     /// <summary>Attempt to auto-load a farm from the title menu.</summary>

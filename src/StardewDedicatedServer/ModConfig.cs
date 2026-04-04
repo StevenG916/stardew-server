@@ -76,6 +76,7 @@ public sealed class ModConfig
     public bool MonstersOnFarm { get; set; } = false;
 
     /// <summary>Starting cabin count when creating a new farm. Range: 0-3</summary>
+    /// <summary>Starting cabin count when creating a new farm. Range: 0-3 (game limit for new game flow).</summary>
     public int StartingCabins { get; set; } = 3;
 
     /*********
